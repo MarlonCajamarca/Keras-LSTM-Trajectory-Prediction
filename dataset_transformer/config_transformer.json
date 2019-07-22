@@ -1,0 +1,8 @@
+{
+	"classes2extract" : ["LIGHTWEIGHT_AUTOMOTIVE_VEHICLE", "BUS", "VAN"],
+	"traj_len" : 20,
+	"slide_wdn" : 5,
+	"max_in_seq_length" : 10,
+	"split_percentage" : 0.85,
+	"sos_token" : 9999
+}
