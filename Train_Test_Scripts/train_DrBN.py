@@ -13,7 +13,7 @@ import argparse
 
 from keras.utils import HDF5Matrix
 from keras.models import Model
-from keras.layers import Input, CuDNNLSTM, Dense, TimeDistributed, Dropout
+from keras.layers import Input, CuDNNLSTM, Dense, TimeDistributed, Dropout, BatchNormalization, Activation
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras import backend
 
@@ -66,6 +66,9 @@ def create_models(encoder_input_train, decoder_input_train, hyperparams):
     """
     latent_dim = hyperparams["latent_dim"]
     hidden_dense_dim = hyperparams["hidden_dense_dim"]
+    dropout_hidden_rate = hyperparams["dropout_hidden_rate"]
+    dropout_output_rate = hyperparams["dropout_output_rate"]
+    BN_use_bias = hyperparams["batch_norm_use_bias"]
     """ TRAINING ENCODER """
     input_feature_vect_length = encoder_input_train.shape[2]  
     output_feature_vect_lenght = decoder_input_train.shape[2]
@@ -77,14 +80,35 @@ def create_models(encoder_input_train, decoder_input_train, hyperparams):
     decoder_inputs = Input(shape = (None, output_feature_vect_lenght), name = "dec_input")
     decoder_lstm = CuDNNLSTM(units = latent_dim, return_sequences = True, return_state = True, name = "dec_CuDNNLSTM")
     decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state = encoder_states)
-    decoder_dense_hidden = TimeDistributed(Dense(latent_dim, activation = "relu"), name = "dec_dense_1")
-    decoder_dense_hidden_2 = TimeDistributed(Dense(hidden_dense_dim, activation = "relu"), name = "dec_dense_2")
-    decoder_dense = TimeDistributed(Dense(output_feature_vect_lenght, activation = "linear"), name = "dec_dense_out")
+    
+    decoder_dense_hidden = TimeDistributed(Dense(latent_dim, activation = None, use_bias = BN_use_bias), name = "dec_dense_1")
+    decoder_BN_1 = TimeDistributed(BatchNormalization(), name = "BN_1")
+    decoder_dense_1_activation = TimeDistributed(Activation("relu"), name = "linear_1")
 
-    decoder_outputs_dense = decoder_dense_hidden(decoder_outputs)
-    decoder_outputs_dense_2 = decoder_dense_hidden_2(decoder_outputs_dense)
-    decoder_outputs = decoder_dense(decoder_outputs_dense_2)
-
+    #dropout_1 = TimeDistributed(Dropout(dropout_hidden_rate, name = "dropout_1"))
+    
+    decoder_dense_hidden_2 = TimeDistributed(Dense(hidden_dense_dim, activation = None, use_bias = BN_use_bias), name = "dec_dense_2")
+    decoder_BN_2 = TimeDistributed(BatchNormalization(), name = "BN_2")
+    decoder_dense_2_activation = TimeDistributed(Activation("relu"), name = "linear_2")
+    
+    #dropout_2 = TimeDistributed(Dropout(dropout_output_rate, name = "dropout_2"), name = "linear_2")
+    
+    decoder_dense_output = TimeDistributed(Dense(output_feature_vect_lenght, activation = None, use_bias = BN_use_bias), name = "dec_dense_out")
+    decoder_BN_3 = TimeDistributed(BatchNormalization(), name = "BN_3")
+    decoder_dense_output_activation = TimeDistributed(Activation("linear"), name = "linear_output")
+    
+    ## Model instantiation using previously defined layers
+    decoder_out_dense_1 = decoder_dense_hidden(decoder_outputs)
+    decoder_out_BN_1 = decoder_BN_1(decoder_out_dense_1)
+    decoder_out_activations_1 = decoder_dense_1_activation(decoder_out_BN_1)
+    #decoder_dropout_1 = dropout_1(decoder_out_activations_1)
+    decoder_out_dense_2 = decoder_dense_hidden_2(decoder_out_activations_1)
+    decoder_out_BN_2 = decoder_BN_2(decoder_out_dense_2)
+    decoder_out_activations_2 = decoder_dense_2_activation(decoder_out_BN_2)
+    #decoder_dropout_2 = dropout_2(decoder_out_activations_2)
+    decoder_final_out = decoder_dense_output(decoder_out_activations_2)
+    decoder_final_out_BN = decoder_BN_3(decoder_final_out)
+    decoder_outputs = decoder_dense_output_activation(decoder_final_out_BN)
     """  FULL TRAINING ENCODER-DECODER MODEL """
     full_model = Model(inputs = [encoder_inputs, decoder_inputs], outputs = decoder_outputs)
     """  DEFINING INFERENCE ENCODER  """
@@ -95,11 +119,19 @@ def create_models(encoder_input_train, decoder_input_train, hyperparams):
     decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
     decoder_outputs, state_h, state_c = decoder_lstm(decoder_inputs, initial_state = decoder_states_inputs)
     decoder_states = [state_h, state_c]
+    
+    decoder_out_dense_1 = decoder_dense_hidden(decoder_outputs)
+    decoder_out_BN_1 = decoder_BN_1(decoder_out_dense_1)
+    decoder_out_activations_1 = decoder_dense_1_activation(decoder_out_BN_1)
 
-    decoder_outputs_dense = decoder_dense_hidden(decoder_outputs)
-    decoder_outputs_dense_2 = decoder_dense_hidden_2(decoder_outputs_dense)
-    decoder_outputs = decoder_dense(decoder_outputs_dense_2)
+    decoder_out_dense_2 = decoder_dense_hidden_2(decoder_out_activations_1)
+    decoder_out_BN_2 = decoder_BN_2(decoder_out_dense_2)
+    decoder_out_activations_2 = decoder_dense_2_activation(decoder_out_BN_2)
 
+    decoder_final_out = decoder_dense_output(decoder_out_activations_2)
+    decoder_final_out_BN = decoder_BN_3(decoder_final_out)
+    decoder_outputs = decoder_dense_output_activation(decoder_final_out_BN)
+    
     decoder_model = Model(inputs= [decoder_inputs] + decoder_states_inputs, outputs = [decoder_outputs] + decoder_states)
     print(" Train and Inference models successfully created!!!")
     return full_model, encoder_model, decoder_model

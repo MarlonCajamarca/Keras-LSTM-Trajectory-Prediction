@@ -1,0 +1,19 @@
+{
+	"epochs" : [20],
+	"val_split_size" : [0.05],
+	"latent_dim" : [128, 256, 320],
+	"batch_size" : [256], 
+	"learning_rate" : [0.0001, 0.001, 0.01, 0.1],
+	"loss_fcn" : ["mse"],
+	"hidden_dense_dim" : [32],
+	"lr_decay" : [0.0],
+	"BETA_1" : [0.9],
+	"BETA_2" : [0.999],
+	"clip_select_flag" : ["norm"],
+	"ams_grad_flag" : [true],
+	"clip_norm_thresh" : [1.0, 10],
+	"clip_val_thresh" : [0.5],
+	"patience_steps" : [5],
+	"test_batch_size" : [256],
+	"num_test_predictions" : [5]
+}

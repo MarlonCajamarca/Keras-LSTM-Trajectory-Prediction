@@ -9,17 +9,18 @@ import keras
 import os
 import json   
 import sys
+import talos as ta
 import argparse
 
 from keras.utils import HDF5Matrix
 from keras.models import Model
-from keras.layers import Input, CuDNNLSTM, Dense, TimeDistributed, Dropout
+from keras.layers import Input, CuDNNLSTM, Dense, TimeDistributed
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras import backend
 
 sys.path.append('..')
 
-def load_datasets(in_h5_path, partition ='train'):
+def load_datasets(in_h5_path, hyperparams, partition ='train'):
     """
     Load train or test dataset
     
@@ -34,20 +35,39 @@ def load_datasets(in_h5_path, partition ='train'):
     decoder_input_* -> HDF5_Group : HDF5_Group containing train/test decoder_input dataset
     decoder_target_* -> HDF5_Group : HDF5_Group containing train/test decoder_target dataset
     """
+    p = {
+            "latent_dim" : hyperparams["latent_dim"],
+            "epochs" : hyperparams["epochs"],
+        	"val_split_size" : hyperparams["val_split_size"],
+        	"batch_size" : hyperparams["batch_size"], 
+        	"learning_rate" : hyperparams["learning_rate"],
+        	"loss_fcn" : hyperparams["loss_fcn"],
+        	"hidden_dense_dim" : hyperparams["hidden_dense_dim"],
+        	"lr_decay" : hyperparams["lr_decay"],
+        	"BETA_1" : hyperparams["BETA_1"],
+        	"BETA_2" : hyperparams["BETA_2"],
+        	"clip_select_flag" : hyperparams["clip_select_flag"],
+        	"ams_grad_flag" : hyperparams["ams_grad_flag"],
+        	"clip_norm_thresh" : hyperparams["clip_norm_thresh"],
+        	"clip_val_thresh" : hyperparams["clip_val_thresh"],
+        	"patience_steps" : hyperparams["patience_steps"],
+        	"test_batch_size" : hyperparams["test_batch_size"],
+        	"num_test_predictions" : hyperparams["num_test_predictions"] 
+        }
     if partition == 'train':
         encoder_input_train = HDF5Matrix(datapath=in_h5_path, dataset ="train/encoder_in")
         decoder_input_train = HDF5Matrix(datapath=in_h5_path, dataset = "train/decoder_in")
         decoder_target_train = HDF5Matrix(datapath=in_h5_path, dataset="train/decoder_target")
-        return encoder_input_train, decoder_input_train, decoder_target_train
+        return encoder_input_train, decoder_input_train, decoder_target_train, p
     elif partition == 'test':
         encoder_input_test = HDF5Matrix(datapath=in_h5_path, dataset="test/encoder_in")
         decoder_input_test = HDF5Matrix(datapath=in_h5_path, dataset="test/decoder_in")
         decoder_target_test = HDF5Matrix(datapath=in_h5_path, dataset="test/decoder_target")
-        return encoder_input_test, decoder_input_test, decoder_target_test
+        return encoder_input_test, decoder_input_test, decoder_target_test, p
     else:
         print("Invalid 'partition' parameter: Valid values: ['train', 'test']")
 
-def create_models(encoder_input_train, decoder_input_train, hyperparams):
+def create_models(encoder_input_train, decoder_input_train, params):
     """
     Instantiate full_model, encoder_model and decoder_model
     
@@ -64,8 +84,8 @@ def create_models(encoder_input_train, decoder_input_train, hyperparams):
     encoder_model -> keras model : Keras model for the inference encoder
     decoder_model -> keras_model : Keras model for the inference decoder
     """
-    latent_dim = hyperparams["latent_dim"]
-    hidden_dense_dim = hyperparams["hidden_dense_dim"]
+    latent_dim = params["latent_dim"]
+    hidden_dense_dim = params["hidden_dense_dim"]
     """ TRAINING ENCODER """
     input_feature_vect_length = encoder_input_train.shape[2]  
     output_feature_vect_lenght = decoder_input_train.shape[2]
@@ -77,14 +97,12 @@ def create_models(encoder_input_train, decoder_input_train, hyperparams):
     decoder_inputs = Input(shape = (None, output_feature_vect_lenght), name = "dec_input")
     decoder_lstm = CuDNNLSTM(units = latent_dim, return_sequences = True, return_state = True, name = "dec_CuDNNLSTM")
     decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state = encoder_states)
-    decoder_dense_hidden = TimeDistributed(Dense(latent_dim, activation = "relu"), name = "dec_dense_1")
-    decoder_dense_hidden_2 = TimeDistributed(Dense(hidden_dense_dim, activation = "relu"), name = "dec_dense_2")
-    decoder_dense = TimeDistributed(Dense(output_feature_vect_lenght, activation = "linear"), name = "dec_dense_out")
-
+    decoder_dense_hidden = TimeDistributed(Dense(latent_dim, activation = "linear", name = "dec_dense_1"))
+    decoder_dense_hidden_2 = TimeDistributed(Dense(hidden_dense_dim, activation = "linear", name = "dec_dense_2"))
+    decoder_dense = TimeDistributed(Dense(output_feature_vect_lenght, activation = "linear", name = "dec_dense_out"))
     decoder_outputs_dense = decoder_dense_hidden(decoder_outputs)
     decoder_outputs_dense_2 = decoder_dense_hidden_2(decoder_outputs_dense)
     decoder_outputs = decoder_dense(decoder_outputs_dense_2)
-
     """  FULL TRAINING ENCODER-DECODER MODEL """
     full_model = Model(inputs = [encoder_inputs, decoder_inputs], outputs = decoder_outputs)
     """  DEFINING INFERENCE ENCODER  """
@@ -95,11 +113,9 @@ def create_models(encoder_input_train, decoder_input_train, hyperparams):
     decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
     decoder_outputs, state_h, state_c = decoder_lstm(decoder_inputs, initial_state = decoder_states_inputs)
     decoder_states = [state_h, state_c]
-
     decoder_outputs_dense = decoder_dense_hidden(decoder_outputs)
     decoder_outputs_dense_2 = decoder_dense_hidden_2(decoder_outputs_dense)
     decoder_outputs = decoder_dense(decoder_outputs_dense_2)
-
     decoder_model = Model(inputs= [decoder_inputs] + decoder_states_inputs, outputs = [decoder_outputs] + decoder_states)
     print(" Train and Inference models successfully created!!!")
     return full_model, encoder_model, decoder_model
@@ -119,7 +135,7 @@ def rmse(y_true, y_pred):
     """
     return backend.sqrt(backend.mean(backend.square(y_pred - y_true), axis=-1))
 
-def compile_models(full_train_model, hyperparams):
+def compile_models(full_train_model, params):
     """
     Compile full training model with choosen hyperparameters.
     
@@ -140,15 +156,15 @@ def compile_models(full_train_model, hyperparams):
     -------
     full_train_model -> keras model : A fully-compiled keras model using the specified hyperparameters.
     """
-    clip_select_flag = hyperparams["clip_select_flag"]
-    learning_rate = hyperparams["learning_rate"]
-    BETA_1 = hyperparams["BETA_1"]
-    BETA_2 = hyperparams["BETA_2"]
-    lr_decay = hyperparams["lr_decay"]
-    clip_norm_thresh = hyperparams["clip_norm_thresh"]
-    clip_val_thresh = hyperparams["clip_val_thresh"]
-    ams_grad_flag = hyperparams["ams_grad_flag"]
-    loss_function = hyperparams["loss_fcn"]
+    clip_select_flag = params["clip_select_flag"]
+    learning_rate = params["learning_rate"]
+    BETA_1 = params["BETA_1"]
+    BETA_2 = params["BETA_2"]
+    lr_decay = params["lr_decay"]
+    clip_norm_thresh = params["clip_norm_thresh"]
+    clip_val_thresh = params["clip_val_thresh"]
+    ams_grad_flag = params["ams_grad_flag"]
+    loss_function = params["loss_fcn"]
     if clip_select_flag == "norm":
         opt_norm_clip = keras.optimizers.adam(lr = learning_rate, beta_1 = BETA_1, beta_2 = BETA_2, decay = lr_decay, clipnorm = clip_norm_thresh, amsgrad = ams_grad_flag)
         full_train_model.compile(optimizer = opt_norm_clip, loss = loss_function, metrics = [rmse])   
@@ -159,7 +175,7 @@ def compile_models(full_train_model, hyperparams):
         print(" Clipping Method Selected is not avalaible! Please enter a valid string for this parameter: Valid strings set:['norm', 'value']")
     return full_train_model
 
-def fit_models(all_models, hyperparams, out_directory, encoder_input_train, decoder_input_train, decoder_target_train):
+def fit_models(all_models, params, out_directory, encoder_input_train, decoder_input_train, decoder_target_train):
     """
     Fit training data with choosen hyperparameters.
     
@@ -185,10 +201,10 @@ def fit_models(all_models, hyperparams, out_directory, encoder_input_train, deco
     full_train_model = all_models[0]
     encoder_model = all_models[1]
     decoder_model = all_models[2]
-    patience_steps = hyperparams["patience_steps"]
-    batch_size = hyperparams["batch_size"]
-    epochs = hyperparams["epochs"]
-    val_split_size = hyperparams["val_split_size"]
+    patience_steps = params["patience_steps"]
+    batch_size = params["batch_size"]
+    epochs = params["epochs"]
+    val_split_size = params["val_split_size"]
     early_stop = EarlyStopping(monitor = 'val_rmse', mode = 'min', patience = patience_steps, verbose = 1)
     checkpoint_filename = "full_model.h5"
     checkpoint_path = os.path.join(out_directory, checkpoint_filename)
@@ -200,7 +216,7 @@ def fit_models(all_models, hyperparams, out_directory, encoder_input_train, deco
     decoder_model_path = os.path.join(out_directory, decoder_model_filename)
     encoder_model.save(encoder_model_path, include_optimizer = False)
     decoder_model.save(decoder_model_path, include_optimizer = False)
-    return training_history
+    return training_history, full_train_model
 
 def main(args):
     """
@@ -218,17 +234,17 @@ def main(args):
     """
     IN_HDF5_PATH = args.dataset
     saved_models_base_path = args.output
-    config_file_path = args.config
-    encoder_input_train, decoder_input_train, decoder_target_train = load_datasets(IN_HDF5_PATH, partition = 'train')
+    config_file_path = args.config_talos
     with open(config_file_path) as config_file:
         hyperparams = json.load(config_file)
-    full_model, encoder_model, decoder_model = create_models(encoder_input_train, decoder_input_train, hyperparams)
-    full_train_model = compile_models(full_model, hyperparams)
+    encoder_input_train, decoder_input_train, decoder_target_train, p = load_datasets(IN_HDF5_PATH, hyperparams, partition = 'train')
+    full_model, encoder_model, decoder_model = create_models(encoder_input_train, decoder_input_train, p)
+    full_train_model = compile_models(full_model, p)
     full_train_model.summary(line_length = 180)
     encoder_model.summary(line_length = 180)
     decoder_model.summary(line_length = 180)
     all_models = [full_train_model, encoder_model, decoder_model]
-    history = fit_models(all_models, hyperparams, saved_models_base_path, encoder_input_train, decoder_input_train, decoder_target_train)
+    history, full_train_model  = fit_models(all_models, p, saved_models_base_path, encoder_input_train, decoder_input_train, decoder_target_train)
     history_model_filename = "model_history.json"
     history_model_path = os.path.join(saved_models_base_path, history_model_filename)
     with open(history_model_path, 'w') as f:
@@ -239,6 +255,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description ="CLI for Training Path Prediction LSTM models")
     parser.add_argument("dataset", help ="Path to input train-test dataset in .hdf5 format")
     parser.add_argument("output", help ="Path to the output directory where resulting models, graphs and history results are saved.")
-    parser.add_argument("config", help ="Path to configuration file used for training.")
+    parser.add_argument("config_talos", help ="Path to talos configuration file used for hyperparameter optimization while training.")
     args = parser.parse_args()
     main(args)
