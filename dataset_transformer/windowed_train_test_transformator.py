@@ -3,8 +3,7 @@
 """
 @author: Marlon Andres Cajamarca
 
-Path Prediction LSTM - Dataset Mdified raw dataset Transformator tool for generating train and test sets for LSTM models
-                       without out-of-RAM issues
+Path Prediction LSTM - Dataset Transformator tool for generating train and test sets for LSTM models
 """
 import numpy as np
 import h5py
@@ -12,6 +11,7 @@ import json
 import time
 import sys
 import argparse
+from keras.utils import HDF5Matrix
 
 sys.path.append('..')
 
@@ -36,7 +36,7 @@ class SequenceXtractor(object):
             self.append_trajectories(dataset, value)
     def extract(self):
         print("Running SequenceXtractor...")
-        with h5py.File(self.in_raw_dataset, 'r+') as input_raw_dataset:
+        with h5py.File(self.in_raw_dataset, 'r+') as input_raw_dataset: 
             start = time.time()
             input_raw_dataset.visititems(self.get_hdf5_data)
             np.random.shuffle(self.numpy_dataset)
@@ -45,32 +45,24 @@ class SequenceXtractor(object):
             return self.numpy_dataset
 
 def enc_dec_dataset_generator(numpy_dataset, hyperparams):
-    """ Generate the encoder and decoder input data used to create train and test sets
-    
-    """
     sos_token = hyperparams["sos_token"]
     traj_len = hyperparams["traj_len"]
     max_in_trajectory_length = hyperparams["max_in_seq_length"]
+    traj_stride = hyperparams["traj_stride"]
     max_out_trajectory_length = traj_len - max_in_trajectory_length - 1
     sos_idx_vector = np.array([sos_token, sos_token, sos_token, sos_token]).astype("uint16")
-    
     encoder_input_data = []
-    for seq in numpy_dataset:
-        encoder_input_data.append(seq[:max_in_trajectory_length])
-    encoder_input_data = np.array(encoder_input_data)
-    
+    decoder_target_data = []
     decoder_input_data = []
     for seq in numpy_dataset:
-        decoder_in_data = np.vstack((sos_idx_vector, seq[max_in_trajectory_length: max_in_trajectory_length + max_out_trajectory_length]))
-        decoder_input_data.append(decoder_in_data)
-    decoder_input_data = np.array(decoder_input_data)
-    
-    decoder_target_data = []
-    for seq in numpy_dataset:
-        decoder_tg_data = seq[max_in_trajectory_length: max_in_trajectory_length + max_out_trajectory_length + 1]
+        encoder_input_data.append(seq[:max_in_trajectory_length])
+        decoder_tg_data = seq[max_in_trajectory_length : max_in_trajectory_length + max_out_trajectory_length + 1 : traj_stride]
         decoder_target_data.append(decoder_tg_data)
+        decoder_in_data = np.vstack((sos_idx_vector, seq[max_in_trajectory_length +  traj_stride : max_in_trajectory_length + max_out_trajectory_length : traj_stride]))
+        decoder_input_data.append(decoder_in_data)
+    encoder_input_data = np.array(encoder_input_data)
+    decoder_input_data = np.array(decoder_input_data)
     decoder_target_data = np.array(decoder_target_data)
-
     print("  Encoder Input tensor: shape : {} , type : {}".format(encoder_input_data.shape, encoder_input_data.dtype))
     print("  Decoder Input tensor: shape : {} , type : {}".format(decoder_input_data.shape, decoder_input_data.dtype))
     print("  Decoder Target tensor: shape : {} , type : {}".format(decoder_target_data.shape, decoder_target_data.dtype))
@@ -92,7 +84,7 @@ def train_test_splitter(encoder_input_data, decoder_input_data, decoder_target_d
     return  encoder_input_train, decoder_input_train, decoder_target_train, encoder_input_test, decoder_input_test, decoder_target_test
 
 def main(args):
-    print("Dataset Transformer tool Started!")
+    print("Dataset Transformer tool has started!")
     in_h5_path = args.raw_dataset
     out_h5_path = args.out_dataset
     config_file_path = args.config
@@ -114,6 +106,20 @@ def main(args):
         test_data.create_dataset("decoder_in", data = decoder_input_test)
         test_data.create_dataset("decoder_target", data = decoder_target_test)
         print("Train and Test Datasets already saved at {}".format(out_h5_path))
+        #  Dubugging output dataset
+        out_encoder_input_train = HDF5Matrix(datapath=out_h5_path, dataset = "train/encoder_in")
+        out_decoder_input_train = HDF5Matrix(datapath=out_h5_path, dataset = "train/decoder_in")
+        out_decoder_target_train = HDF5Matrix(datapath=out_h5_path, dataset= "train/decoder_target")
+        n_features_out = out_encoder_input_train.shape[2]  
+        num_test_samples = out_encoder_input_train.shape[0]
+        random_trajectory_samples = np.random.randint(low = 0, high = num_test_samples, size = hyperparams["num_test_predictions"])
+        sorted_random_trajectory_samples = sorted(random_trajectory_samples)
+        source_trajectories = out_encoder_input_train[sorted_random_trajectory_samples]
+        target_trajectories = out_decoder_target_train[sorted_random_trajectory_samples]
+        predicted_trajectories = []
+        for idx, src_traj in enumerate(source_trajectories):
+            print("Source trajectory # {}: \n {}".format(idx, src_traj))
+            print("Target trajectory # {}: \n {}".format(idx, target_trajectories[idx]))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
