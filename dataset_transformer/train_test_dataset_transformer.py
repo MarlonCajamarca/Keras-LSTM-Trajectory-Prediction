@@ -82,7 +82,7 @@ def train_test_splitter(encoder_input_data, decoder_input_data, decoder_target_d
     return  encoder_input_train, decoder_input_train, decoder_target_train, encoder_input_test, decoder_input_test, decoder_target_test
 
 def main(args):
-    print("Dataset Transformer tool Started!")
+    print("Dataset Transformer tool has started!")
     in_h5_path = args.raw_dataset
     out_h5_path = args.out_dataset
     config_file_path = args.config

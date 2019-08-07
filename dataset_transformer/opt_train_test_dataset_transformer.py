@@ -38,6 +38,7 @@ class SequenceXtractor(object):
         print("Running SequenceXtractor...")
         with h5py.File(self.in_raw_dataset, 'r+') as input_raw_dataset:
             start = time.time()
+            print("Number of raw trajectories in input file : \n {}".format(len(input_raw_dataset)))
             input_raw_dataset.visititems(self.get_hdf5_data)
             np.random.shuffle(self.numpy_dataset)
             end = time.time()
@@ -51,6 +52,8 @@ def enc_dec_dataset_generator(numpy_dataset, hyperparams):
     sos_token = hyperparams["sos_token"]
     traj_len = hyperparams["traj_len"]
     max_in_trajectory_length = hyperparams["max_in_seq_length"]
+    traj_stride = hyperparams["traj_stride"]
+
     max_out_trajectory_length = traj_len - max_in_trajectory_length - 1
     sos_idx_vector = np.array([sos_token, sos_token, sos_token, sos_token]).astype("uint16")
     
@@ -61,13 +64,13 @@ def enc_dec_dataset_generator(numpy_dataset, hyperparams):
     
     decoder_input_data = []
     for seq in numpy_dataset:
-        decoder_in_data = np.vstack((sos_idx_vector, seq[max_in_trajectory_length: max_in_trajectory_length + max_out_trajectory_length]))
+        decoder_in_data = np.vstack((sos_idx_vector, seq[max_in_trajectory_length +  traj_stride : max_in_trajectory_length + max_out_trajectory_length : traj_stride]))
         decoder_input_data.append(decoder_in_data)
     decoder_input_data = np.array(decoder_input_data)
     
     decoder_target_data = []
     for seq in numpy_dataset:
-        decoder_tg_data = seq[max_in_trajectory_length: max_in_trajectory_length + max_out_trajectory_length + 1]
+        decoder_tg_data = seq[max_in_trajectory_length : max_in_trajectory_length + max_out_trajectory_length + 1 : traj_stride]
         decoder_target_data.append(decoder_tg_data)
     decoder_target_data = np.array(decoder_target_data)
 
@@ -92,7 +95,7 @@ def train_test_splitter(encoder_input_data, decoder_input_data, decoder_target_d
     return  encoder_input_train, decoder_input_train, decoder_target_train, encoder_input_test, decoder_input_test, decoder_target_test
 
 def main(args):
-    print("Dataset Transformer tool Started!")
+    print("Dataset Transformer tool launched!!!")
     in_h5_path = args.raw_dataset
     out_h5_path = args.out_dataset
     config_file_path = args.config

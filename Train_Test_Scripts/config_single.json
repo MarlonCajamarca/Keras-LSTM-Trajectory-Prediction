@@ -1,9 +1,9 @@
 {
 	"epochs" : 100,
-	"val_split_size" : 0.05,
 	"latent_dim" : 256,
 	"batch_size" : 256,
 	"learning_rate" : 0.003,
+	"val_split_size" : 0.05,
 	"loss_fcn" : "mse",
 	"hidden_dense_dim" : 64,
 	"dropout_hidden_rate" : 0.0,

@@ -7,13 +7,14 @@ Path Prediction LSTM - Path Prediction RNN Training script
 """
 import keras
 import os
-import json   
+import json
 import sys
 import argparse
+import datetime
 
 from keras.utils import HDF5Matrix
 from keras.models import Model
-from keras.layers import Input, CuDNNLSTM, Dense, TimeDistributed, Dropout
+from keras.layers import Input, CuDNNLSTM, Dense, TimeDistributed
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras import backend
 
@@ -69,36 +70,36 @@ def create_models(encoder_input_train, decoder_input_train, hyperparams):
     """ TRAINING ENCODER """
     input_feature_vect_length = encoder_input_train.shape[2]  
     output_feature_vect_lenght = decoder_input_train.shape[2]
-    encoder_inputs = Input(shape = (None, input_feature_vect_length), name = "enc_input")
-    encoder_lstm = CuDNNLSTM(units = latent_dim, return_state = True, name = "enc_CuDNNLSTM")
+    encoder_inputs = Input(shape = (None, input_feature_vect_length), name = "encoder_inputs")
+    encoder_lstm = CuDNNLSTM(units = latent_dim, return_state = True, name = "encoder_lstm")
+    # Making predictions with encoder model
     encoder_outputs, state_h, state_c = encoder_lstm(encoder_inputs)
     encoder_states = [state_h, state_c]
     """ TRAINING DECODER """
-    decoder_inputs = Input(shape = (None, output_feature_vect_lenght), name = "dec_input")
-    decoder_lstm = CuDNNLSTM(units = latent_dim, return_sequences = True, return_state = True, name = "dec_CuDNNLSTM")
+    decoder_inputs = Input(shape = (None, output_feature_vect_lenght), name = "decoder_inputs")
+    decoder_lstm = CuDNNLSTM(units = latent_dim, return_sequences = True, return_state = True, name = "decoder_lstm")
+    decoder_dense_hidden = TimeDistributed(Dense(latent_dim, activation = "linear", name = "decoder_dense_hidden_1"), name = "time_distributed_1")
+    decoder_dense_hidden_2 = TimeDistributed(Dense(hidden_dense_dim, activation = "linear", name = "decoder_dense_hidden_2"), name = "time_distributed_2")
+    decoder_dense_output = TimeDistributed(Dense(output_feature_vect_lenght, activation = "linear", name = "decoder_dense_output"), name = "time_distributed_output")
+    # Making predictions with decoder model
     decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state = encoder_states)
-    decoder_dense_hidden = TimeDistributed(Dense(latent_dim, activation = "relu"), name = "dec_dense_1")
-    decoder_dense_hidden_2 = TimeDistributed(Dense(hidden_dense_dim, activation = "relu"), name = "dec_dense_2")
-    decoder_dense = TimeDistributed(Dense(output_feature_vect_lenght, activation = "linear"), name = "dec_dense_out")
-
     decoder_outputs_dense = decoder_dense_hidden(decoder_outputs)
     decoder_outputs_dense_2 = decoder_dense_hidden_2(decoder_outputs_dense)
-    decoder_outputs = decoder_dense(decoder_outputs_dense_2)
-
+    decoder_outputs = decoder_dense_output(decoder_outputs_dense_2)
     """  FULL TRAINING ENCODER-DECODER MODEL """
     full_model = Model(inputs = [encoder_inputs, decoder_inputs], outputs = decoder_outputs)
     """  DEFINING INFERENCE ENCODER  """
     encoder_model = Model(inputs = encoder_inputs, outputs = encoder_states)
     """  DEFINING INFERENCE DECODER """
-    decoder_state_input_h = Input(shape=(latent_dim,), name = "inf_enc_in_h")
-    decoder_state_input_c = Input(shape=(latent_dim,), name = "inf_enc_in_c")
+    decoder_state_input_h = Input(shape=(latent_dim,), name = "inference_encoder_input_h")
+    decoder_state_input_c = Input(shape=(latent_dim,), name = "inference_encoder_input_c")
+    
     decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
     decoder_outputs, state_h, state_c = decoder_lstm(decoder_inputs, initial_state = decoder_states_inputs)
     decoder_states = [state_h, state_c]
-
     decoder_outputs_dense = decoder_dense_hidden(decoder_outputs)
     decoder_outputs_dense_2 = decoder_dense_hidden_2(decoder_outputs_dense)
-    decoder_outputs = decoder_dense(decoder_outputs_dense_2)
+    decoder_outputs = decoder_dense_output(decoder_outputs_dense_2)
 
     decoder_model = Model(inputs= [decoder_inputs] + decoder_states_inputs, outputs = [decoder_outputs] + decoder_states)
     print(" Train and Inference models successfully created!!!")
@@ -189,17 +190,23 @@ def fit_models(all_models, hyperparams, out_directory, encoder_input_train, deco
     batch_size = hyperparams["batch_size"]
     epochs = hyperparams["epochs"]
     val_split_size = hyperparams["val_split_size"]
+    latent_dim = hyperparams["latent_dim"]
+    ## ------------ Keras Callbacks ------------------
+    # Early Stopping
     early_stop = EarlyStopping(monitor = 'val_rmse', mode = 'min', patience = patience_steps, verbose = 1)
+    # Model Checkpoint
     checkpoint_filename = "full_model.h5"
     checkpoint_path = os.path.join(out_directory, checkpoint_filename)
     model_ckpnt = ModelCheckpoint(filepath=checkpoint_path, monitor = 'val_rmse', mode = 'min', save_best_only = True, save_weights_only = False, verbose = 1)
+    ## Fitting Function
     training_history = full_train_model.fit(x = [encoder_input_train, decoder_input_train], y = decoder_target_train, shuffle = "batch", batch_size = batch_size, epochs = epochs, validation_split = val_split_size, callbacks = [early_stop, model_ckpnt])
+    ## Save inference models
     encoder_model_filename = "encoder_model.h5"
     decoder_model_filename = "decoder_model.h5"
     encoder_model_path = os.path.join(out_directory, encoder_model_filename)
     decoder_model_path = os.path.join(out_directory, decoder_model_filename)
-    encoder_model.save(encoder_model_path, include_optimizer = False)
-    decoder_model.save(decoder_model_path, include_optimizer = False)
+    encoder_model.save(encoder_model_path)
+    decoder_model.save(decoder_model_path)
     return training_history
 
 def main(args):

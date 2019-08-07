@@ -116,7 +116,7 @@ def plot_results(results_path, history, mode = "loss"):
 
 def evaluate_models(full_model, encoder_input_test, decoder_input_test, decoder_target_test, hyperparams, history, out_directory):
     """
-    Evaluates the previuously trained models
+    Evaluates the previuously trained modelsFull
     
     Parameters
     ----------
