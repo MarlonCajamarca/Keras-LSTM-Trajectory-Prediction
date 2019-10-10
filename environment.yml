@@ -1,9 +1,11 @@
 name: tf_gpu
 channels:
+  - eumetsat
   - conda-forge
   - anaconda
   - defaults
 dependencies:
+  - _libgcc_mutex=0.1=main
   - _tflow_select=2.1.0=gpu
   - absl-py=0.7.1=py37_0
   - alabaster=0.7.12=py37_0
@@ -18,8 +20,8 @@ dependencies:
   - blosc=1.15.0=hd408876_0
   - bzip2=1.0.6=h14c3975_5
   - c-ares=1.15.0=h7b6447c_1
-  - ca-certificates=2019.5.15=0
-  - certifi=2019.3.9=py37_0
+  - ca-certificates=2019.5.15=1
+  - certifi=2019.6.16=py37_1
   - cffi=1.12.3=py37h2e261b9_0
   - chardet=3.0.4=py37_1
   - cloudpickle=1.0.0=py_0
@@ -44,6 +46,7 @@ dependencies:
   - gstreamer=1.14.0=hb453b48_1
   - h5py=2.9.0=py37h7918eee_0
   - hdf5=1.10.4=hb1b8bf9_0
+  - hdfview=2.14.0=0
   - icu=58.2=hf484d3e_1000
   - idna=2.8=py37_0
   - imagesize=1.1.0=py37_0
@@ -106,7 +109,8 @@ dependencies:
   - numpy=1.16.2=py37h7e9f1db_0
   - numpy-base=1.16.2=py37hde5b4d6_0
   - numpydoc=0.9.1=py_0
-  - openssl=1.1.1=h7b6447c_0
+  - openjdk=8.0.152=h46b5887_1
+  - openssl=1.1.1c=h7b6447c_1
   - packaging=19.0=py37_0
   - pandas=0.24.2=py37he6710b0_0
   - pandoc=2.7.2=0
@@ -190,5 +194,12 @@ dependencies:
   - yaml=0.1.7=h96e3832_1
   - zeromq=4.2.5=hf484d3e_1006
   - zlib=1.2.11=h7b6447c_3
+  - pip:
+    - blessings==1.7
+    - inquirer==2.6.3
+    - keras-lookahead==0.9.0
+    - keras-rectified-adam==0.16.0
+    - python-editor==1.0.4
+    - readchar==2.0.1
 prefix: /home/macajamarca/anaconda3/envs/tf_gpu
 

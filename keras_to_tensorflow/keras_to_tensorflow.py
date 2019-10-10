@@ -18,6 +18,8 @@ from absl import flags
 from absl import logging
 import keras
 from keras import backend as K
+from keras_radam import RAdam
+from keras_lookahead import Lookahead
 from keras.models import model_from_json, model_from_yaml
 
 K.set_learning_phase(0)
@@ -75,7 +77,7 @@ def load_model(input_model_path, input_json_path=None, input_yaml_path=None):
         raise FileNotFoundError(
             'Model file `{}` does not exist.'.format(input_model_path))
     try:
-        model = keras.models.load_model(input_model_path, custom_objects={'rmse': rmse})
+        model = keras.models.load_model(input_model_path, custom_objects={'rmse': rmse, 'Lookahead': Lookahead, 'RAdam' : RAdam})
         return model
     except FileNotFoundError as err:
         logging.error('Input mode file (%s) does not exist.', FLAGS.input_model)

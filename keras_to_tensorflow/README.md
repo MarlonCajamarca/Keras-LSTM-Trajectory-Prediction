@@ -17,7 +17,7 @@ Keras models can be saved as a single [`.hdf5` or `h5`] file, which stores both 
     python keras_to_tensorflow.py 
         --input_model="path/to/keras/model.h5" 
         --output_model="path/to/save/model.pb"
-     
+        
 Keras models can also be saved in two separate files where a [`.hdf5` or `h5`] file stores the weights, using the `model.save_weights()` function, and another `.json` file stores the network architecture using the `model.to_json()` function.
 In this case, the model can be converted as follows:
 
