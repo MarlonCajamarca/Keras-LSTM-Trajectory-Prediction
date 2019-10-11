@@ -1,4 +1,4 @@
-# LSTM-BASED PATH PREDICTION RECURRENT NEURAL NETWORK
+# OBJECT TRAJECTORY FORECASTING USING LSTM-BASED RECURRENT NEURAL NETWORKS
 
 Training, testing and inference with multi-input multi-output LSTM-based Recurrent Neural Networks for trajectory forecasting 
 
