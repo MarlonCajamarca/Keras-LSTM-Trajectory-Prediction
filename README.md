@@ -1,6 +1,6 @@
 # LSTM-BASED PATH PREDICTION RECURRENT NEURAL NETWORK
 
-Training, testing and inference with multi-input multi-output LSTM-based Recurrent Neural Networks for trajectory forecasting. 
+Training, testing and inference with multi-input multi-output LSTM-based Recurrent Neural Networks for trajectory forecasting 
 
 # Setup Your Anaconda Environment
 
