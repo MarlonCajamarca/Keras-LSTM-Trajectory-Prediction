@@ -1,10 +1,10 @@
 # LSTM-BASED PATH PREDICTION RECURRENT NEURAL NETWORK
 
-Training, testing and inference with LSTM-based Recurrent Neural Networks for path prediction forecasting. 
+Training, testing and inference with multi-input multi-output LSTM-based Recurrent Neural Networks for trajectory forecasting. 
 
 # Setup Your Anaconda Environment
 
-In order to use the training, testing and inference scripts, we need to create an Anaconda dedicated environment containing predifined packages (i.e. tensorflow-gpu). If you do not already have Anaconda installed on your machine, please follow the installation steps avalaible at: 
+In order to use the training, testing, inference scripts and utility tools, you need to create/clone an Anaconda dedicated environment containing predifined packages (i.e. tensorflow-gpu). If you do not already have Anaconda installed on your machine, please follow the installation steps avalaible at: 
 https://www.digitalocean.com/community/tutorials/how-to-install-anaconda-on-ubuntu-18-04-quickstart
 
 Once you have successfully installed Anaconda, create a new environment with from a previously created Anaconda environment by using the `environment.yaml` file. Then, please activate your recently created environment.
