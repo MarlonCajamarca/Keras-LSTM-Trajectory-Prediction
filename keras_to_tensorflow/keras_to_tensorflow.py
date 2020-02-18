@@ -5,10 +5,9 @@ This script is freely available under the MIT Public License.
 Please see the License file in the root for details.
 
 The following code snippet will convert the keras model files
-to the freezed .pb tensorflow weight file. The resultant TensorFlow model
+to the frozen.pb tensorflow weight file. The resultant TensorFlow model
 holds both the model architecture and its associated weights.
 """
-
 import tensorflow as tf
 from tensorflow.python.framework import graph_util
 from tensorflow.python.framework import graph_io
@@ -52,22 +51,13 @@ flags.DEFINE_boolean('output_meta_ckpt', False,
                      'If set to True, exports the model as .meta, .index, and '
                      '.data files, with a checkpoint file. These can be later '
                      'loaded in TensorFlow to continue training.')
-
 flags.mark_flag_as_required('input_model')
 flags.mark_flag_as_required('output_model')
+
 
 def rmse(y_true, y_pred):
     """
     Calculate Root Mean Squared Error custom metric
-    
-    Parameters
-    ----------
-    y_true -> float : Ground-truth value for RMSE metric calculation
-    y_pred -> float : Predicted value for RMSE metric calculation 
-    
-    Returns
-    ------
-    rmse_value -> float : The RMSE value between y_true and y_pred
     """
     return K.sqrt(K.mean(K.square(y_pred - y_true), axis=-1))
 
@@ -128,29 +118,22 @@ def main(args):
     output_model = FLAGS.output_model
     if str(Path(output_model).parent) == '.':
         output_model = str((Path.cwd() / output_model))
-
     output_fld = Path(output_model).parent
     output_model_name = Path(output_model).name
     output_model_stem = Path(output_model).stem
     output_model_pbtxt_name = output_model_stem + '.pbtxt'
-
     # Create output directory if it does not exist
     Path(output_model).parent.mkdir(parents=True, exist_ok=True)
-
     if FLAGS.channels_first:
         K.set_image_data_format('channels_first')
     else:
         K.set_image_data_format('channels_last')
-
     model = load_model(FLAGS.input_model, FLAGS.input_model_json, FLAGS.input_model_yaml)
-
-    # TODO(amirabdi): Support networks with multiple inputs
     orig_output_node_names = [node.op.name for node in model.outputs]
     if FLAGS.output_nodes_prefix:
         num_output = len(orig_output_node_names)
         pred = [None] * num_output
         converted_output_node_names = [None] * num_output
-
         # Create dummy tf nodes to rename output
         for i in range(num_output):
             converted_output_node_names[i] = '{}{}'.format(
@@ -161,18 +144,15 @@ def main(args):
         converted_output_node_names = orig_output_node_names
     logging.info('Converted output node names are: %s',
                  str(converted_output_node_names))
-
     sess = K.get_session()
     if FLAGS.output_meta_ckpt:
         saver = tf.train.Saver()
         saver.save(sess, str(output_fld / output_model_stem))
-
     if FLAGS.save_graph_def:
         tf.train.write_graph(sess.graph.as_graph_def(), str(output_fld),
                              output_model_pbtxt_name, as_text=True)
         logging.info('Saved the graph definition in ascii format at %s',
                      str(Path(output_fld) / output_model_pbtxt_name))
-
     if FLAGS.quantize:
         from tensorflow.tools.graph_transforms import TransformGraph
         transforms = ["quantize_weights", "quantize_nodes"]
@@ -188,10 +168,9 @@ def main(args):
             sess,
             sess.graph.as_graph_def(),
             converted_output_node_names)
-
     graph_io.write_graph(constant_graph, str(output_fld), output_model_name,
                          as_text=False)
-    logging.info('Saved the freezed graph at %s',
+    logging.info('Saved the frozen graph at %s',
                  str(Path(output_fld) / output_model_name))
 
 
