@@ -13,7 +13,6 @@ import sys
 import argparse
 from keras.utils import HDF5Matrix
 import subprocess
-import os
 
 sys.path.append('..')
 

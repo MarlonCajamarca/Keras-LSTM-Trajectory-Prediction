@@ -12,11 +12,11 @@
 		"MOTORCYCLE",
 		"PEDESTRIAN"
 	],
-	"trajectory_length": 60,
-	"slide_wdn": 10,
+	"trajectory_length": 45,
+	"slide_wdn": 45,
 	"trajectory_stride": 1,
-	"max_in_seq_length": 30,
-	"split_percentage": 0.90,
+	"max_in_seq_length": 15,
+	"split_percentage": 0.95,
 	"polynomial_degree": 3,
 	"num_test_predictions": 1
 }
