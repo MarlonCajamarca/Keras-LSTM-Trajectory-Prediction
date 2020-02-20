@@ -37,12 +37,13 @@ _MODEL_HISTORY_FILENAME = "model_history.json"
 
 
 class LstmTrainer(object):
-	
-	def __init__(self, in_hdf5_path: str, saved_models_base_path: str, hyperparameters):
+
+	def __init__(self, in_hdf5_path: str, saved_models_base_path: str, hyperparameters, use_checkpoint: bool):
 		self.in_hdf5_path = in_hdf5_path
 		self.saved_models_base_path = saved_models_base_path
 		self.hyperparameters = hyperparameters
 		self.partition = _DEFAULT_DATASET_PARTITION
+		self.use_checkpoint = use_checkpoint
 		self.x_train = None
 		self.y_train = None
 		self.x_test = None
@@ -68,13 +69,15 @@ class LstmTrainer(object):
 	def run(self):
 		start_train_time = time.time()
 		self.load_datasets()
-		self.create_models()
+		if self.use_checkpoint:
+			self.load_models()
+		else:
+			self.create_models()
 		self.compile_models()
-		self.lstm_model.summary(line_length=180)
 		self.fit_models()
 		end_train_time = time.time()
 		print(" Model successfully trained in {} minutes!!!".format((end_train_time - start_train_time) / 60))
-	
+
 	def load_datasets(self):
 		"""
 		Load train or test dataset
@@ -92,7 +95,15 @@ class LstmTrainer(object):
 		else:
 			print("Invalid 'partition' parameter: Valid values: ['train', 'test']")
 			sys.exit(1)
-			
+
+	def load_models(self):
+		output_model_name = self.get_model_name_from_configuration()
+		output_path = os.path.join(self.saved_models_base_path, output_model_name)
+		full_output_pathname = os.path.join(output_path, _MODEL_FILENAME)
+		self.lstm_model = keras.models.load_model(full_output_pathname, custom_objects={'rmse': rmse, 'Lookahead': Lookahead, 'RAdam': RAdam})
+		print(" --> LSTM model successfully restored from checkpoint file...")
+		self.lstm_model.summary(line_length=180)
+
 	def create_models(self):
 		"""
 		Instantiate full_model, encoder_model and decoder_model
@@ -114,8 +125,9 @@ class LstmTrainer(object):
 			self.instantiate_model_with_dropout()
 		else:
 			self.instantiate_model_without_dropout()
-		print(" Model successfully created!!!")
-		
+		print(" --> LSTM model successfully created...")
+		self.lstm_model.summary(line_length=180)
+
 	def compile_models(self):
 		"""
 		Compile full training model with chosen hyperparameters.
@@ -137,7 +149,8 @@ class LstmTrainer(object):
 			                                                 amsgrad=self.hyperparameters["ams_grad_flag"]),
 			                           sync_period=self.hyperparameters["sync_lookahead"],
 			                           slow_step=self.hyperparameters["slow_weights_lookahead"])
-		elif (self.hyperparameters["clip_select_flag"] == "norm" or self.hyperparameters["clip_select_flag"] == "value") and self.hyperparameters["optimizer"] == "nadam":
+		elif (self.hyperparameters["clip_select_flag"] == "norm" or self.hyperparameters[
+			"clip_select_flag"] == "value") and self.hyperparameters["optimizer"] == "nadam":
 			self.optimizer = keras.optimizers.nadam(lr=self.hyperparameters["learning_rate"],
 			                                        beta_1=self.hyperparameters["BETA_1"],
 			                                        beta_2=self.hyperparameters["BETA_2"],
@@ -167,23 +180,31 @@ class LstmTrainer(object):
 			                           slow_step=self.hyperparameters["slow_weights_lookahead"])
 		else:
 			print(" Clipping Method OR Optimizer Selected is not available! ")
-			print(" Please enter a valid string for these parameter: \n Valid Clipping:['norm', 'value'] \n Valid Optimizers: ['adam', 'NAdam', 'RAdam', 'Ranger']")
+			print(
+				" Please enter a valid string for these parameter: \n Valid Clipping:['norm', 'value'] \n Valid Optimizers: ['adam', 'NAdam', 'RAdam', 'Ranger']")
 			sys.exit(1)
 		self.lstm_model.compile(optimizer=self.optimizer, loss=self.hyperparameters["loss_fcn"], metrics=[rmse])
-		
+
 	def fit_models(self):
 		"""
-		Fit training data with chosen hyperparameters.
+			Fit training data with chosen hyperparameters.
 		"""
-		output_model_name = self.get_model_from_configuration()
+		model_filename = str
+		output_model_name = self.get_model_name_from_configuration()
 		output_path = os.path.join(self.saved_models_base_path, output_model_name)
-		try:
-			os.mkdir(output_path)
-		except OSError as error:
-			print(error)
-		early_stop = EarlyStopping(monitor='val_rmse', mode='min', patience=self.hyperparameters["patience_steps"], verbose=1)
-		full_output_pathname = os.path.join(output_path, _MODEL_FILENAME)
-		model_checkpoint = ModelCheckpoint(filepath=full_output_pathname, monitor='val_rmse', mode='min', save_best_only=True, save_weights_only=False, verbose=1)
+		if not self.use_checkpoint:
+			try:
+				model_filename = _MODEL_FILENAME
+				os.mkdir(output_path)
+			except OSError as error:
+				print(error)
+		else:
+			model_filename = "ckp_" + _MODEL_FILENAME
+		full_out_pathname = os.path.join(output_path, model_filename)
+		model_checkpoint = ModelCheckpoint(filepath=full_out_pathname, monitor='val_rmse', mode='min',
+		                                   save_best_only=True, save_weights_only=False, verbose=1)
+		early_stop = EarlyStopping(monitor='val_rmse', mode='min', patience=self.hyperparameters["patience_steps"],
+		                           verbose=1)
 		if _USE_TENSORBOARD:
 			print(" Model fitting using Tensorboard!")
 			tensorboard_logs_filename = "tensorboard_logs"
@@ -208,13 +229,14 @@ class LstmTrainer(object):
 			                                            shuffle="batch",
 			                                            batch_size=self.hyperparameters["batch_size"],
 			                                            epochs=self.hyperparameters["epochs"],
-			                                            validation_split=self.hyperparameters["val_split_size"], callbacks=[early_stop, model_checkpoint])
+			                                            validation_split=self.hyperparameters["val_split_size"],
+			                                            callbacks=[early_stop, model_checkpoint])
 		history_model_path = os.path.join(output_path, _MODEL_HISTORY_FILENAME)
 		with open(history_model_path, 'w') as f:
 			json.dump(self.training_history.history, f)
 		print(" Model training history saved successfully!")
 		print(" Model Successfully saved at {}".format(output_path))
-		
+
 	def lstm_layers_instantiation(self):
 		if self.hyperparameters["bidirectional_lstm_flag"]:
 			self.lstm_1 = Bidirectional(CuDNNLSTM(units=self.hyperparameters["latent_dim_lstm_1"],
@@ -248,7 +270,7 @@ class LstmTrainer(object):
 			                        return_sequences=True,
 			                        stateful=self.hyperparameters["stateful_lstm_flag"],
 			                        name="lstm_3")
-		
+
 	def activated_dense_layers_instantiation(self):
 		if self.hyperparameters["activation_dense_type"] == "selu":
 			self.dense_hidden_0 = TimeDistributed(Dense(self.hyperparameters["hidden_dense_dim_0"],
@@ -283,7 +305,7 @@ class LstmTrainer(object):
 		else:
 			'Please enter a valid activation function!  Available : ["relu", "selu"]'
 			sys.exit(1)
-	
+
 	def non_activated_dense_layers_instantiation(self):
 		if self.hyperparameters["activation_dense_type"] == "LeakyReLU":
 			self.dense_hidden_0 = TimeDistributed(Dense(self.hyperparameters["hidden_dense_dim_0"],
@@ -328,7 +350,7 @@ class LstmTrainer(object):
 		else:
 			'Please enter a valid activation function!  Available:["LeakyReLU", "PReLU"]'
 			sys.exit(1)
-				
+
 	def dropout_layers_instantiation(self):
 		self.dropout_1 = TimeDistributed(Dropout(self.hyperparameters["dropout_hidden_rate"],
 		                                         name="dropout_1"),
@@ -336,9 +358,10 @@ class LstmTrainer(object):
 		self.dropout_2 = TimeDistributed(Dropout(self.hyperparameters["dropout_output_rate"],
 		                                         name="dropout_2"),
 		                                 name="dropout_output_time_distributed")
-		
+
 	def instantiate_model_with_dropout(self):
-		if self.hyperparameters["activation_dense_type"] == 'PReLU' or self.hyperparameters["activation_dense_type"] == "LeakyReLU":
+		if self.hyperparameters["activation_dense_type"] == 'PReLU' or self.hyperparameters[
+			"activation_dense_type"] == "LeakyReLU":
 			lstm_1_outputs = self.lstm_1(self.lstm_inputs)
 			lstm_2_outputs = self.lstm_2(lstm_1_outputs)
 			lstm_3_outputs = self.lstm_3(lstm_2_outputs)
@@ -361,7 +384,7 @@ class LstmTrainer(object):
 			dropout_output = self.dropout_2(dense_hidden_1_outputs)
 			dense_outputs = self.dense_output(dropout_output)
 			self.lstm_model = Model(inputs=self.lstm_inputs, outputs=dense_outputs)
-			
+
 	def instantiate_model_without_dropout(self):
 		if self.hyperparameters["activation_dense_type"] == 'PReLU' or self.hyperparameters["activation_dense_type"] == "LeakyReLU":
 			lstm_1_outputs = self.lstm_1(self.lstm_inputs)
@@ -382,27 +405,28 @@ class LstmTrainer(object):
 			dense_hidden_1_outputs = self.dense_hidden_1(dense_hidden_0_outputs)
 			dense_outputs = self.dense_output(dense_hidden_1_outputs)
 			self.lstm_model = Model(inputs=self.lstm_inputs, outputs=dense_outputs)
-			
-	def get_model_from_configuration(self):
-		output_model_name = "ARCH-{}_Data-{}__bs-{}_lr-{}_loss-{}_opt-{}_BD-{}_BDmrg-{}_amsG-{}_DP-{}_sw-{}_sync-{}_act-{}_minLR-{}_ptc-{}_ep-{}".format(self.hyperparameters["ARCH_ID"],
-		                                                                                                                                                 self.hyperparameters["DATA_ID"],
-		                                                                                                                                                 self.hyperparameters["batch_size"],
-		                                                                                                                                                 self.hyperparameters["learning_rate"],
-		                                                                                                                                                 self.hyperparameters["loss_fcn"],
-		                                                                                                                                                 self.hyperparameters["optimizer"],
-		                                                                                                                                                 self.hyperparameters["bidirectional_lstm_flag"],
-		                                                                                                                                                 self.hyperparameters["bidirectional_merge_mode"],
-		                                                                                                                                                 self.hyperparameters["ams_grad_flag"],
-		                                                                                                                                                 self.hyperparameters["dropout_flag"],
-		                                                                                                                                                 self.hyperparameters["slow_weights_lookahead"],
-		                                                                                                                                                 self.hyperparameters["sync_lookahead"],
-		                                                                                                                                                 self.hyperparameters["activation_dense_type"],
-		                                                                                                                                                 self.hyperparameters["min_lr_RAdam"],
-		                                                                                                                                                 self.hyperparameters["patience_steps"],
-		                                                                                                                                                 self.hyperparameters["epochs"])
+
+	def get_model_name_from_configuration(self):
+		output_model_name = "ARCH-{}_Data-{}__bs-{}_lr-{}_loss-{}_opt-{}_BD-{}_BDmrg-{}_amsG-{}_DP-{}_sw-{}_sync-{}_act-{}_minLR-{}_ptc-{}_ep-{}".format(
+			self.hyperparameters["ARCH_ID"],
+			self.hyperparameters["DATA_ID"],
+			self.hyperparameters["batch_size"],
+			self.hyperparameters["learning_rate"],
+			self.hyperparameters["loss_fcn"],
+			self.hyperparameters["optimizer"],
+			self.hyperparameters["bidirectional_lstm_flag"],
+			self.hyperparameters["bidirectional_merge_mode"],
+			self.hyperparameters["ams_grad_flag"],
+			self.hyperparameters["dropout_flag"],
+			self.hyperparameters["slow_weights_lookahead"],
+			self.hyperparameters["sync_lookahead"],
+			self.hyperparameters["activation_dense_type"],
+			self.hyperparameters["min_lr_RAdam"],
+			self.hyperparameters["patience_steps"],
+			self.hyperparameters["epochs"])
 		print("Overview hyperparameters used on training : ", output_model_name)
 		return output_model_name
-	
+
 
 def rmse(y_true, y_prediction):
 	"""
@@ -414,12 +438,11 @@ def rmse(y_true, y_prediction):
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="CLI for Training Path Prediction LSTM models")
 	parser.add_argument("dataset", help="Path to input train-test dataset in .hdf5 format")
-	parser.add_argument("output", help="Path to the output directory where resulting models, graphs and history results are saved.")
+	parser.add_argument("output",
+	                    help="Path to the output directory where resulting models, graphs and history results are saved.")
 	parser.add_argument("config", help="Path to configuration file used for training.")
+	parser.add_argument("--use_checkpoint", action="store_true", default=False)
 	args = parser.parse_args()
-	in_hdf5_path = args.dataset
-	saved_models_base_path = args.output
 	with open(args.config) as config_file:
 		hyperparameters = json.load(config_file)
-	lstm_trainer = LstmTrainer(in_hdf5_path, saved_models_base_path, hyperparameters)
-	lstm_trainer.run()
+	LstmTrainer(args.dataset, args.output, hyperparameters, args.use_checkpoint).run()
