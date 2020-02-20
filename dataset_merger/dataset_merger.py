@@ -35,29 +35,31 @@ class DatasetMerger(object):
 		self.full_x_test_dataset = None
 		self.full_y_test_dataset = None
 		self.out_hdf5_path = out_h5_path
-		
+
+	def run(self):
+		start = time.time()
+		self.shuffle_and_merge_data()
+		self.generate_output_merged_dataset()
+		self.print_debug_trajectories()
+		end = time.time()
+		print(" Datasets successfully merged in {} seconds!!!".format(end - start))
+
 	def shuffle_and_merge_data(self):
-		# Merging corresponding X and y data from input datasets
 		full_x_train_dataset_raw = np.concatenate((self.dataset_1_x_train[:], self.dataset_2_x_train[:]), axis=0)
 		full_y_train_dataset_raw = np.concatenate((self.dataset_1_y_train[:], self.dataset_2_y_train[:]), axis=0)
 		full_x_test_dataset_raw = np.concatenate((self.dataset_1_x_test[:], self.dataset_2_x_test[:]), axis=0)
 		full_y_test_dataset_raw = np.concatenate((self.dataset_1_y_test[:], self.dataset_2_y_test[:]), axis=0)
-		# Zipping the train and test partitions to shuffle X and y accordingly
 		full_train_dataset_shuffle = list(zip(full_x_train_dataset_raw, full_y_train_dataset_raw))
 		full_test_dataset_shuffle = list(zip(full_x_test_dataset_raw, full_y_test_dataset_raw))
-		# Make the shuffle of train and test partitions
 		random.seed(_DEFAULT_SHUFFLE_SEED)
 		np.random.shuffle(full_train_dataset_shuffle)
 		np.random.shuffle(full_test_dataset_shuffle)
-		# Unpacking the shuffled train and test partitions
 		self.full_x_train_dataset, self.full_y_train_dataset = map(list, zip(*full_train_dataset_shuffle))
 		self.full_x_test_dataset, self.full_y_test_dataset = map(list, zip(*full_test_dataset_shuffle))
-		# From tuple to np.array to access size and type
 		self.full_x_train_dataset = np.array(self.full_x_train_dataset)
 		self.full_y_train_dataset = np.array(self.full_y_train_dataset)
 		self.full_x_test_dataset = np.array(self.full_x_test_dataset)
 		self.full_y_test_dataset = np.array(self.full_y_test_dataset)
-		# Printing results + Debugging
 		print(" ---------- Datasets Merging Results ----------")
 		print(" --> Full_X_train_dataset shape: \n {}, type : {}".format(self.full_x_train_dataset.shape, self.full_x_train_dataset.dtype))
 		print(" 1_X_train_dataset shape: \n {}, type : {}".format(self.dataset_1_x_train[:].shape, self.dataset_1_x_train[:].dtype))
@@ -71,8 +73,7 @@ class DatasetMerger(object):
 		print(" --> Full_Y_test_dataset shape: \n {}, type : {}".format(self.full_y_test_dataset.shape, self.full_y_test_dataset.dtype))
 		print(" 1_Y_test_dataset shape: \n {}, type : {}".format(self.dataset_1_y_test[:].shape, self.dataset_1_y_test[:].dtype))
 		print(" 2_Y_test_dataset shape: \n {}, type : {}".format(self.dataset_2_y_test[:].shape, self.dataset_2_y_test[:].dtype))
-		print(" ----------------------------------------------")
-		
+
 	def generate_output_merged_dataset(self):
 		# Creating the output .hdf5 datasets with the previously generated data
 		with h5py.File(self.out_hdf5_path, "a") as output_dataset:
@@ -84,15 +85,7 @@ class DatasetMerger(object):
 			test_data.create_dataset("y_test", data=self.full_y_test_dataset)
 			print("Train and Test Datasets already saved at {}".format(self.out_hdf5_path))
 			print("Datasets successfully merged and saved!")
-		
-	def run(self):
-		start = time.time()
-		self.shuffle_and_merge_data()
-		self.generate_output_merged_dataset()
-		self.print_debug_trajectories()
-		end = time.time()
-		print(" Datasets successfully merged in {} seconds!!!".format(end - start))
-	
+
 	def print_debug_trajectories(self):
 		"""
 	    Print trajectories from previously generated datasets
