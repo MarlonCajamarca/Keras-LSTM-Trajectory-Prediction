@@ -18,7 +18,7 @@ from keras.models import Model
 from keras.layers import Input, CuDNNLSTM, Dense, TimeDistributed, LeakyReLU, PReLU, Bidirectional, Dropout
 from keras_radam import RAdam
 from keras_lookahead import Lookahead
-from keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard
+from keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard, CSVLogger
 from keras import backend
 
 # Configure GPU memory allocation
@@ -34,6 +34,7 @@ _USE_TENSORBOARD = False
 _DEFAULT_DATASET_PARTITION = "train"
 _MODEL_FILENAME = "lstm_model.h5"
 _MODEL_HISTORY_FILENAME = "model_history.json"
+_MODEL_CSV_LOG_FILENAME = "training_history_logs.csv"
 
 
 class LstmTrainer(object):
@@ -65,6 +66,8 @@ class LstmTrainer(object):
 		self.dropout_2 = None
 		self.optimizer = None
 		self.training_history = None
+		self.history_model_path = str
+		self.output_path = str
 
 	def run(self):
 		start_train_time = time.time()
@@ -191,24 +194,26 @@ class LstmTrainer(object):
 		"""
 		model_filename = str
 		output_model_name = self.get_model_name_from_configuration()
-		output_path = os.path.join(self.saved_models_base_path, output_model_name)
+		self.output_path = os.path.join(self.saved_models_base_path, output_model_name)
 		if not self.use_checkpoint:
 			try:
 				model_filename = _MODEL_FILENAME
-				os.mkdir(output_path)
+				os.mkdir(self.output_path)
 			except OSError as error:
 				print(error)
 		else:
 			model_filename = "ckp_" + _MODEL_FILENAME
-		full_out_pathname = os.path.join(output_path, model_filename)
+		full_out_pathname = os.path.join(self.output_path, model_filename)
 		model_checkpoint = ModelCheckpoint(filepath=full_out_pathname, monitor='val_rmse', mode='min',
 		                                   save_best_only=True, save_weights_only=False, verbose=1)
 		early_stop = EarlyStopping(monitor='val_rmse', mode='min', patience=self.hyperparameters["patience_steps"],
 		                           verbose=1)
+		csv_logs_file_path = os.path.join(self.output_path, _MODEL_CSV_LOG_FILENAME)
+		csv_logger = CSVLogger(csv_logs_file_path, append=True)
 		if _USE_TENSORBOARD:
 			print(" Model fitting using Tensorboard!")
 			tensorboard_logs_filename = "tensorboard_logs"
-			tensorboard_logs_path = os.path.join(output_path, tensorboard_logs_filename)
+			tensorboard_logs_path = os.path.join(self.output_path, tensorboard_logs_filename)
 			print(" Tensorboard's log directory : " + tensorboard_logs_path)
 			tensor_board = TensorBoard(log_dir=tensorboard_logs_path,
 			                           histogram_freq=1,
@@ -222,7 +227,7 @@ class LstmTrainer(object):
 			                                            batch_size=self.hyperparameters["batch_size"],
 			                                            epochs=self.hyperparameters["epochs"],
 			                                            validation_split=self.hyperparameters["val_split_size"],
-			                                            callbacks=[early_stop, model_checkpoint, tensor_board])
+			                                            callbacks=[early_stop, model_checkpoint, csv_logger, tensor_board])
 		else:
 			self.training_history = self.lstm_model.fit(x=self.x_train,
 			                                            y=self.y_train,
@@ -230,12 +235,12 @@ class LstmTrainer(object):
 			                                            batch_size=self.hyperparameters["batch_size"],
 			                                            epochs=self.hyperparameters["epochs"],
 			                                            validation_split=self.hyperparameters["val_split_size"],
-			                                            callbacks=[early_stop, model_checkpoint])
-		history_model_path = os.path.join(output_path, _MODEL_HISTORY_FILENAME)
+			                                            callbacks=[early_stop, model_checkpoint, csv_logger])
+		history_model_path = os.path.join(self.output_path, _MODEL_HISTORY_FILENAME)
 		with open(history_model_path, 'w') as f:
 			json.dump(self.training_history.history, f)
 		print(" Model training history saved successfully!")
-		print(" Model Successfully saved at {}".format(output_path))
+		print(" Model Successfully saved at {}".format(self.output_path))
 
 	def lstm_layers_instantiation(self):
 		if self.hyperparameters["bidirectional_lstm_flag"]:
