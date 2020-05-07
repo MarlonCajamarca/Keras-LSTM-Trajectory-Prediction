@@ -1,5 +1,3 @@
-README updating
-
 # OBJECT TRAJECTORY FORECASTING USING LSTM-BASED RECURRENT NEURAL NETWORKS
 
 Training, testing and inference with multi-input multi-output LSTM-based Recurrent Neural Networks for trajectory forecasting 
@@ -22,10 +20,12 @@ A common processing workflow involves using several utility tools for generating
 1. Extract raw object trajectories obtained from a previous Detection + Tracking processing pipeline.
 2. Pack all trajectories in a convenient `raw_paths.h5` file.
 3. Transform and group all raw paths from `raw_paths.h5` into an `train_test.h5` dataset.
-4. Train a Path Prediction LSTM-based neural model, called `model.h5`, using `LSTM_trainer.py` script and `train_test.h5` dataset.
-5. Test previously trained Path Prediction LSTM-based neural model using `evaluate_lstm.py` script.
-6. Optional: to export `model.h5` model as a `model.pb` freezed model, use `keras_to_tensorflow.py` script.
-7. Deploy either your `model.h5` or `model.pb` trained models into an existing video processing pipeline. Trajectory predictions could be used to replace/boost tracking algoritms by incorporating approximated information of future localizations for each object in the scene.
+4. Train and evaluate a Path Prediction LSTM-based neural model, called `model.h5`, using `LSTM_trainer.py` script and `train_test.h5` dataset.
+
+Optionally:
+
+5. Export `model.h5` model as a `model.pb` freezed model, use `keras_to_tensorflow.py` script.
+6. Deploy either your `model.h5` or `model.pb` trained models into an existing video processing pipeline. Trajectory predictions could be used to replace/boost tracking algoritms by incorporating approximated information of future localizations for each object in the scene.
 
 A sample of a multi-object detection + Tracking + Counting pipeline using the LSTM-based trajectory forecasting model trained using the previous workflow:
 
@@ -34,7 +34,9 @@ A sample of a multi-object detection + Tracking + Counting pipeline using the LS
 ## End-to-End Workflow Explained 
 
 ### 1. Extract raw object trajectories obtained from a previous Detection + Tracking processing pipeline.
-In order to train the trajectory forcasting model, you need several .csv files containing raw trajectories obtained from a previous Detection + Tracking processing pipeline, a D+T pipeline for short. The D+T pipeline is in charge of supplying raw D+T trajectories packed in a .csv file with the following format:
+In order to train the trajectory forcasting model, you need several .csv files containing raw trajectories obtained from a previous Detection + Tracking processing pipeline, a D+T pipeline for short. The D+T pipeline is in charge of supplying raw D+T trajectories packed in a .csv file with an specific output format. 
+
+For the sake of completeness, you can download a set of these .csv raw D+T trajectories [HERE!](https://drive.google.com/file/d/1ylOH7bLw50VIdxqh6QRApGAfPnXte2C2/view?usp=sharing)
 
 All of the previously described .csv files must be in a folder for further use by `dataset_creator` utility tool.
 
@@ -52,9 +54,14 @@ All raw paths from `raw_paths.h5` will be used for `dataset_transformer` utility
 	
 The resulting `train-test.h5` dataset will contain 2 HDF5 groups within it, namely `train` and `test`, and will be used for training and inference scripts to train and validate trajectory forecasting models
 
-### 4. Train a Path Prediction LSTM-based neural model, called `model.h5`, 
-By using the `LSTM_trainer.py` script, the previously generated `train-test.h5` dataset, and an user configuration file ``
+Again, for the sake of completeness, you can download an already transformed dataset containing roughly 10 million trajectories from 12 different object classes. This dataset is ready for further train/evaluation tasks if you want to avoid steps 1, 2 and 3 of the workflow and go directly to step 4. The transformed dataset can be download [HERE!](https://drive.google.com/file/d/16OZnWe7Y0ie3gEHVEGR8GAb22cwJdMVJ/view?usp=sharing)
 
+### 4. Train and evaluate a Path Prediction LSTM-based neural model
+By using the `LSTM_trainer.py` script, the previously generated `train-test.h5` dataset, and an user configuration file `config_lstm.json` you can train your own custom LSTM-based Trajectory prediction model. 
+
+In addition, in order to evaluate the performance of the trained models, use the `evaluate_lstm.py` script using also the previously generated `train-test.h5` dataset, and the same user configuration file `config_lstm.json` used for training. The `evaluate_lstm.py` script contains code use for load datasets, load trained models and making inference with them.
+
+# Project Tools and Utilities
 
 ## Training
 CLI for Training Path Prediction LSTM-based neural models.
