@@ -54,12 +54,16 @@ All raw paths from `raw_paths.h5` will be used by `dataset_transformer` utility 
 	
 The resulting `train-test.h5` dataset will contain 2 HDF5 groups within it, named `train` and `test`, and they will be used later by training and inference scripts to train and validate trajectory forecasting models.
 
-Again, for the sake of completeness, you can download an already transformed dataset containing roughly 10 million trajectories from 12 different object classes. This dataset is ready for further train/evaluation tasks if you want to avoid steps 1, 2 and 3 of the workflow and go directly to step 4. The transformed dataset can be download [HERE!](https://drive.google.com/file/d/16OZnWe7Y0ie3gEHVEGR8GAb22cwJdMVJ/view?usp=sharing)
+Again, for the sake of completeness, you can download an already transformed dataset containing roughly 10 million trajectories from 12 different object classes. This dataset is ready for further train/evaluation tasks if you want to avoid steps 1, 2 and 3 of the workflow and go directly to step 4. The transformed dataset can be downloaded [HERE!](https://drive.google.com/file/d/16OZnWe7Y0ie3gEHVEGR8GAb22cwJdMVJ/view?usp=sharing)
 
 ### 4. Train and evaluate a Path Prediction LSTM-based neural model
-By using the `LSTM_trainer.py` script, the previously generated `train-test.h5` dataset jointly with a model configuration file `config_lstm.json` you can train your own custom LSTM-based Trajectory prediction model and fine-tune its hyperparameters at your convenience. 
+By using the `LSTM_trainer.py` script, the previously generated `train-test.h5` dataset jointly with a model configuration file `config_lstm.json` you can train your own custom LSTM-based Trajectory prediction model and fine-tune its hyperparameters at your convenience.
 
 In addition, in order to evaluate the trained models performance, the user can use the `evaluate_lstm.py` script using also the previously generated `train-test.h5` dataset and the model configuration file `config_lstm.json`. The `evaluate_lstm.py` script contains convenience methods for loading datasets, loading trained models and making inference with them.
+
+Due to private rights from my organization, I can not upload any models trained with their data. However, I have processed several videos taken by me for educational and testing purposes and trained a model from them. The trained .PB model is now open-source and available for testing on custom data. A GoogleDrive link to the pre-trained model can be downloaded [HERE!](https://drive.google.com/file/d/1u919FVbDhOH0zMJFnpksG8xo_a-t-Ovq/view?usp=sharing). Fell free to download and try it!
+
+However, this model was trained with meta-classes like CAR, TRUCKS, MOTORCYCLE, BYCYCLE, PEDESTRIAN, BUS, AUTO_RICKSHAW and others, so keep in mind that you need to evaluate if the model transfers well to your desider applications or consider to train from scratch a new model that will capture well the dynamics of the trajectory forecasting for your use cases.
 
 # Project Tools and Utilities
 
